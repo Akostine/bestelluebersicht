@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bestellungen</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: url('icons/GrafittyNontel_darkened.png') no-repeat center center fixed;
+      background-size: cover;
+      font-family: sans-serif;
+      transform: rotate(90deg);
+      transform-origin: left top;
+      width: 100vh;
+      height: 100vw;
+      overflow-x: hidden;
+    }
+    .container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 20px;
+    }
+    .bestellung {
+      background-color: rgba(0, 0, 0, 0.75);
+      border-radius: 20px;
+      padding: 20px;
+      margin: 20px 0;
+      width: 90%;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      position: relative;
+    }
+    .logo {
+      width: 100%;
+      max-height: 200px;
+      object-fit: contain;
+      border-radius: 10px;
+    }
+    .deadline {
+      font-size: 2em;
+      font-weight: bold;
+      text-align: right;
+    }
+    .icons-row, .addons-row {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .icon {
+      width: 48px;
+      height: 48px;
+    }
+    .watt-box {
+      background-color: #888820;
+      padding: 5px 15px;
+      border-radius: 10px;
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+    .status-icon {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 48px;
+    }
+    .final-icon {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      width: 64px;
+    }
+    .addons-row {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="bestellung">
+      <img src="icons/logo1.png" alt="Logo" class="logo">
+      <div class="deadline" style="color: red; background: rgba(255,0,0,0.3);">
+        10.04.2025 <img src="icons/001-warning.png" class="status-icon">
+      </div>
+      <div class="icons-row">
+        <img src="icons/frase.png" class="icon">
+        <img src="icons/led-leiste.png" class="icon">
+        <img src="icons/silikon.png" class="icon">
+        <img src="icons/011-print.png" class="icon">
+        <img src="icons/009-paint.png" class="icon">
+        <img src="icons/verpackung.png" class="icon">
+      </div>
+      <div class="icons-row">
+        <img src="icons/015-remote-control.png" class="icon">
+        <img src="icons/002-water-drop.png" class="icon">
+        <img src="icons/008-delivery-1.png" class="icon">
+        <div class="watt-box">300W</div>
+      </div>
+      <img src="icons/prufen.png" class="final-icon">
+      <div class="addons-row">
+        <!-- weitere icons hier -->
+      </div>
+    </div>
+  </div>
+</body>
+</html>
