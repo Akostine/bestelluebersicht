@@ -38,21 +38,9 @@
       gap: 10px;
       position: relative;
     }
-    .logo {
-      width: 100%;
-      max-height: 200px;
-      object-fit: contain;
-      border-radius: 10px;
-    }
-    .deadline {
-      font-size: 2em;
-      font-weight: bold;
-      text-align: right;
-    }
-    .icons-row, .addons-row {
+    .icons-row {
       display: flex;
       justify-content: space-around;
-      align-items: center;
       flex-wrap: wrap;
       gap: 10px;
     }
@@ -83,16 +71,15 @@
       position: absolute;
       bottom: 10px;
       left: 10px;
+      display: flex;
+      gap: 8px;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="bestellung">
-      <img src="icons/logo1.png" alt="Logo" class="logo">
-      <div class="deadline" style="color: red; background: rgba(255,0,0,0.3);">
-        10.04.2025 <img src="icons/001-warning.png" class="status-icon">
-      </div>
+      <h2 style="color: red;">10.04.2025 <img src="icons/001-warning.png" class="status-icon"></h2>
       <div class="icons-row">
         <img src="icons/frase.png" class="icon">
         <img src="icons/led-leiste.png" class="icon">
@@ -105,11 +92,13 @@
         <img src="icons/015-remote-control.png" class="icon">
         <img src="icons/002-water-drop.png" class="icon">
         <img src="icons/008-delivery-1.png" class="icon">
-        <div class="watt-box">300W</div>
+        <div class="watt-box">300W <img src="icons/013-energetic.png" class="icon" style="width:24px;height:24px;margin-left:10px;"></div>
       </div>
       <img src="icons/prufen.png" class="final-icon">
       <div class="addons-row">
-        <!-- weitere icons hier -->
+        <img src="icons/015-remote-control.png" class="icon">
+        <img src="icons/002-water-drop.png" class="icon">
+        <img src="icons/008-delivery-1.png" class="icon">
       </div>
     </div>
   </div>
