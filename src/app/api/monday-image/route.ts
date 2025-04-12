@@ -1,210 +1,244 @@
 // src/app/api/monday-image/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 
 export const runtime = 'edge';
 
-// Функция для расширенного логирования
+// Кэш для уменьшения запросов к API
+const imageCache = new Map<string, { data: ArrayBuffer, contentType: string, timestamp: number }>();
+const CACHE_TIMEOUT = 900000; // 15 минут
+
 function logInfo(message: string, data?: any) {
   console.log(`[MONDAY-PROXY] ${message}`, data ? JSON.stringify(data) : '');
 }
 
-// Функция для отправки запроса с таймаутом
-async function fetchWithTimeout(url: string, options: RequestInit, timeout = 8000): Promise<Response> {
-  // Создаем контроллер для прерывания запроса по таймауту
-  const controller = new AbortController();
-  const { signal } = controller;
-  
-  // Добавляем сигнал к опциям запроса
-  const fetchOptions = { ...options, signal };
-  
-  // Создаем таймер для прерывания запроса
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
+// Функция для получения публичного URL файла через GraphQL API
+async function getPublicAssetUrl(assetId: string, token: string): Promise<string | null> {
   try {
-    const response = await fetch(url, fetchOptions);
-    clearTimeout(timeoutId);
-    return response;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    throw error;
+    const graphqlQuery = {
+      query: `
+        query {
+          assets(ids: [${assetId}]) {
+            id
+            url
+            public_url
+          }
+        }
+      `
+    };
+
+    logInfo(`Выполняем GraphQL запрос для получения URL ресурса: ${assetId}`);
+
+    const response = await fetch('https://api.monday.com/v2', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token
+      },
+      body: JSON.stringify(graphqlQuery)
+    });
+
+    if (!response.ok) {
+      logInfo(`GraphQL API ответил с ошибкой: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    
+    if (data.errors) {
+      logInfo('GraphQL вернул ошибки:', data.errors);
+      return null;
+    }
+    
+    if (data.data?.assets?.length > 0) {
+      const asset = data.data.assets[0];
+      logInfo('Получены данные о ресурсе:', asset);
+      
+      // Сначала пробуем получить public_url, затем обычный url
+      return asset.public_url || asset.url || null;
+    } else {
+      logInfo('Ресурс не найден в ответе API');
+      return null;
+    }
+  } catch (error:any) {
+    logInfo(`Ошибка при получении публичного URL: ${error.message}`);
+    return null;
   }
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
-  // Получаем URL изображения из параметра запроса
   const { searchParams } = new URL(request.url);
   const imageUrl = searchParams.get('url');
+  const assetId = searchParams.get('id') || '';
+  const skipCache = searchParams.get('t') !== null;
   const token = process.env.MONDAY_TOKEN;
 
-  logInfo(`Получен запрос для: ${imageUrl}`);
+  logInfo(`Получен запрос для: ${imageUrl?.substring(0, 100)}...`);
 
   if (!imageUrl) {
-    logInfo('Отсутствует URL изображения');
     return new Response('Missing image URL', { status: 400 });
   }
 
   if (!token) {
-    logInfo('Отсутствует API токен');
     return new Response('Missing API token', { status: 500 });
   }
 
+  // Создаем ключ для кэша
+  const cacheKey = imageUrl;
+
+  // Проверяем кэш, если не запрошено пропустить кэш
+  if (!skipCache && imageCache.has(cacheKey)) {
+    const cachedData = imageCache.get(cacheKey)!;
+    const now = Date.now();
+    
+    // Используем кэшированные данные, если они не устарели
+    if (now - cachedData.timestamp < CACHE_TIMEOUT) {
+      logInfo(`Используем кэшированную версию для: ${imageUrl?.substring(0, 50)}...`);
+      
+      return new Response(cachedData.data, {
+        headers: {
+          'Content-Type': cachedData.contentType,
+          'Cache-Control': 'public, max-age=3600',
+          'Access-Control-Allow-Origin': '*',
+          'X-Cache': 'HIT'
+        }
+      });
+    } else {
+      // Удаляем устаревшие данные
+      imageCache.delete(cacheKey);
+    }
+  }
+
   try {
-    // Извлекаем ID ресурса из URL
-    let assetId = '';
-    if (imageUrl.includes('/resources/')) {
+    // Извлекаем ID ресурса из URL, если он не был передан как параметр
+    let resourceId = assetId;
+    if (!resourceId && imageUrl.includes('/resources/')) {
       const match = imageUrl.match(/\/resources\/(\d+)\//);
       if (match && match[1]) {
-        assetId = match[1];
-        logInfo(`Извлечен ID ресурса: ${assetId}`);
+        resourceId = match[1];
+        logInfo(`Извлечен ID ресурса из URL: ${resourceId}`);
       }
     }
 
-    if (!assetId) {
-      logInfo('Не удалось извлечь ID ресурса из URL');
-      return new Response('Could not extract asset ID from URL', { status: 400 });
+    if (!resourceId) {
+      logInfo('Не удалось извлечь ID ресурса');
+      return new Response('Could not extract asset ID', { status: 400 });
     }
 
-    // Пробуем использовать новый API для публичного доступа к файлам
-    const publicFileUrl = `https://api.monday.com/v2/file/${assetId}/public-url`;
-    logInfo(`Пытаемся получить публичный URL для файла: ${publicFileUrl}`);
-
-    try {
-      const publicUrlResponse = await fetchWithTimeout(publicFileUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': token,
-          'Accept': 'application/json'
-        },
-        cache: 'no-store'
-      }, 5000); // 5 секунд таймаут
-
-      if (publicUrlResponse.ok) {
-        const publicUrlData = await publicUrlResponse.json();
-        logInfo('Получен ответ для публичного URL:', publicUrlData);
+    // НОВЫЙ КОД: Получаем публичный URL через GraphQL API
+    const publicApiUrl = await getPublicAssetUrl(resourceId, token);
+    
+    if (publicApiUrl) {
+      logInfo(`Получен публичный URL через API: ${publicApiUrl}`);
+      
+      try {
+        const imageResponse = await fetch(publicApiUrl, { cache: 'no-store' });
         
-        if (publicUrlData && publicUrlData.data && publicUrlData.data.url) {
-          const publicUrl = publicUrlData.data.url;
-          logInfo(`Получен публичный URL: ${publicUrl}`);
+        if (imageResponse.ok) {
+          const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
+          const imageData = await imageResponse.arrayBuffer();
           
-          // Перенаправляем на публичный URL
-          return NextResponse.redirect(publicUrl);
+          // Сохраняем в кэш
+          imageCache.set(cacheKey, {
+            data: imageData,
+            contentType,
+            timestamp: Date.now()
+          });
+          
+          logInfo(`Успешно загружено изображение через официальный API URL: ${imageData.byteLength} байт`);
+          
+          return new Response(imageData, {
+            headers: {
+              'Content-Type': contentType,
+              'Cache-Control': 'public, max-age=3600',
+              'Access-Control-Allow-Origin': '*',
+              'X-Source': 'MondayAPI'
+            }
+          });
+        } else {
+          logInfo(`Ошибка при загрузке через публичный API URL: ${imageResponse.status}`);
         }
+      } catch (e:any) {
+        logInfo(`Ошибка при загрузке через публичный API URL: ${e.message}`);
       }
-    } catch (e:any) {
-      logInfo('Ошибка при получении публичного URL:', { error: e.message });
-      // Продолжаем с другими методами
     }
 
-    // Пробуем использовать File Download API Monday.com
-    const fileDownloadUrl = `https://files.monday.com/file/download/${assetId}`;
-    logInfo(`Пытаемся загрузить файл по URL: ${fileDownloadUrl}`);
+    // Если API метод не сработал, пробуем файловый API
+    const fileDownloadUrl = `https://files.monday.com/file/download/${resourceId}`;
+    logInfo(`Пробуем download URL: ${fileDownloadUrl}`);
 
-    try {
-      const fileResponse = await fetchWithTimeout(fileDownloadUrl, {
-        headers: {
-          'Authorization': token,
-          'User-Agent': 'Mozilla/5.0 (compatible; NeonDisplay/1.0)'
-        },
-        cache: 'no-store'
-      }, 5000); // 5 секунд таймаут
+    const fileResponse = await fetch(fileDownloadUrl, {
+      headers: {
+        'Authorization': token,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      cache: 'no-store'
+    });
 
-      if (fileResponse.ok) {
-        // Получаем данные из первого успешного запроса
-        const contentType = fileResponse.headers.get('content-type') || 'image/jpeg';
-        const imageData = await fileResponse.arrayBuffer();
-        
-        logInfo(`Успешно получен файл: ${imageData.byteLength} байт, тип: ${contentType}`);
-        
-        return new Response(imageData, {
-          headers: {
-            'Content-Type': contentType,
-            'Cache-Control': 'public, max-age=3600',
-            'Access-Control-Allow-Origin': '*'
-          }
-        });
-      }
+    if (fileResponse.ok) {
+      const contentType = fileResponse.headers.get('content-type') || 'image/jpeg';
+      const imageData = await fileResponse.arrayBuffer();
       
-      logInfo(`Ошибка загрузки файла: ${fileResponse.status} ${fileResponse.statusText}`);
-    } catch (e:any) {
-      logInfo('Ошибка при загрузке файла:', { error: e.message });
-      // Продолжаем с другими методами
+      // Сохраняем в кэш
+      imageCache.set(cacheKey, {
+        data: imageData,
+        contentType,
+        timestamp: Date.now()
+      });
+      
+      logInfo(`Успешно получен файл через download URL: ${imageData.byteLength} байт`);
+      
+      return new Response(imageData, {
+        headers: {
+          'Content-Type': contentType,
+          'Cache-Control': 'public, max-age=3600',
+          'Access-Control-Allow-Origin': '*',
+          'X-Source': 'FileAPI'
+        }
+      });
     }
 
-    // Попробуем второй вариант URL
-    const alternativeUrl = `https://files.monday.com/files/${assetId}`;
-    logInfo(`Пробуем альтернативный URL: ${alternativeUrl}`);
+    // Пробуем прямой запрос в последнюю очередь
+    logInfo(`Прямой запрос к URL: ${imageUrl}`);
     
-    try {
-      const alternativeResponse = await fetchWithTimeout(alternativeUrl, {
-        headers: {
-          'Authorization': token,
-          'User-Agent': 'Mozilla/5.0 (compatible; NeonDisplay/1.0)'
-        },
-        cache: 'no-store'
-      }, 5000); // 5 секунд таймаут
-
-      if (alternativeResponse.ok) {
-        // Используем данные из альтернативного запроса
-        const contentType = alternativeResponse.headers.get('content-type') || 'image/jpeg';
-        const imageData = await alternativeResponse.arrayBuffer();
-        
-        logInfo(`Успешно получен файл через альтернативный запрос: ${imageData.byteLength} байт, тип: ${contentType}`);
-        
-        return new Response(imageData, {
-          headers: {
-            'Content-Type': contentType,
-            'Cache-Control': 'public, max-age=3600',
-            'Access-Control-Allow-Origin': '*'
-          }
-        });
-      }
-      
-      logInfo(`Альтернативный запрос не удался: ${alternativeResponse.status}`);
-    } catch (e:any) {
-      logInfo('Ошибка при альтернативном запросе:', { error: e.message });
-      // Продолжаем с другими методами
+    const directResponse = await fetch(imageUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Cookie': `monday_token=${token}`,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Accept': 'image/*, */*'
+      },
+      cache: 'no-store'
+    });
+    
+    if (!directResponse.ok) {
+      logInfo(`Ошибка при прямом запросе: ${directResponse.status}`);
+      return new Response(`Failed to fetch image: ${directResponse.status}`, { 
+        status: directResponse.status 
+      });
     }
     
-    // Последняя попытка - прямой запрос к исходному URL
-    logInfo(`Выполняем прямой запрос к исходному URL: ${imageUrl}`);
+    const contentType = directResponse.headers.get('content-type') || 'image/jpeg';
+    const imageData = await directResponse.arrayBuffer();
     
-    try {
-      const directResponse = await fetchWithTimeout(imageUrl, {
-        headers: {
-          'Authorization': token,
-          'Cookie': `monday_token=${token}`,
-          'User-Agent': 'Mozilla/5.0 (compatible; NeonDisplay/1.0)',
-          'Accept': 'image/*, */*'
-        },
-        cache: 'no-store'
-      }, 5000); // 5 секунд таймаут
-
-      if (directResponse.ok) {
-        // Получаем данные из прямого запроса
-        const contentType = directResponse.headers.get('content-type') || 'image/jpeg';
-        const imageData = await directResponse.arrayBuffer();
-        
-        logInfo(`Успешно получен файл через прямой запрос: ${imageData.byteLength} байт, тип: ${contentType}`);
-        
-        return new Response(imageData, {
-          headers: {
-            'Content-Type': contentType,
-            'Cache-Control': 'public, max-age=3600',
-            'Access-Control-Allow-Origin': '*'
-          }
-        });
+    // Сохраняем в кэш
+    imageCache.set(cacheKey, {
+      data: imageData,
+      contentType,
+      timestamp: Date.now()
+    });
+    
+    logInfo(`Успешно получен файл через прямой запрос: ${imageData.byteLength} байт`);
+    
+    return new Response(imageData, {
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=3600',
+        'Access-Control-Allow-Origin': '*',
+        'X-Source': 'DirectURL'
       }
-      
-      logInfo(`Прямой запрос не удался: ${directResponse.status}`);
-    } catch (e:any) {
-      logInfo('Ошибка при прямом запросе:', { error: e.message });
-    }
-
-    // Если все методы не сработали, возвращаем ошибку
-    logInfo('Все попытки не удались');
-    return new Response('Failed to fetch image after multiple attempts', { status: 500 });
+    });
   } catch (error: any) {
-    logInfo('Ошибка при получении изображения:', { error: error.message });
+    logInfo(`Ошибка при получении изображения: ${error.message}`);
     return new Response(`Error fetching image: ${error.message}`, { status: 500 });
   }
 }
