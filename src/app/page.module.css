@@ -90,19 +90,21 @@
   transform: scale(0.95);
 }
 
-:global(::-webkit-scrollbar) {
-  width: 12px;
-}
+:global {
+  ::-webkit-scrollbar {
+    width: 12px;
+  }
 
-:global(::-webkit-scrollbar-track) {
-  background: rgba(0, 0, 0, 0.3);
-}
+  ::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+  }
 
-:global(::-webkit-scrollbar-thumb) {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
-}
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+  }
 
-:global(::-webkit-scrollbar-thumb:hover) {
-  background: rgba(255, 255, 255, 0.5);
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+  }
 }
