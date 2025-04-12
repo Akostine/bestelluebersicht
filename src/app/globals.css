@@ -1,33 +1,22 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* src/app/globals.css */
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
 }
 
 html,
 body {
   max-width: 100vw;
-  overflow-x: hidden;
+  height: 100%;
+  overflow: hidden; /* Prevent scrolling on the body */
+  background-color: #000;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+  color: white;
+  background-color: #000;
+  position: relative; /* For the rotated main container */
 }
 
 a {
@@ -35,8 +24,25 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+@font-face {
+  font-family: 'NeonFont';
+  src: url('/fonts/neon.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Utility classes */
+.neon-text {
+  font-family: 'NeonFont', 'Brush Script MT', cursive;
+  text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 15px #0073e6, 0 0 20px #0073e6;
+}
+
+/* For portrait mode */
+@media (orientation: portrait) {
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
   }
 }

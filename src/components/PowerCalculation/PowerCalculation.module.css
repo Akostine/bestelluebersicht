@@ -1,0 +1,23 @@
+/* src/components/PowerCalculation/PowerCalculation.module.css */
+.powerCalculation {
+  display: flex;
+  align-items: center;
+  background-color: rgba(255, 215, 0, 0.8);
+  padding: 10px 15px;
+  border-radius: 12px;
+  margin-top: 10px;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  margin-right: 15px;
+}
+
+.wattage {
+  font-size: 32px;
+  font-weight: bold;
+  color: #000;
+  font-family: 'Arial', sans-serif;
+}

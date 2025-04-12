@@ -1,0 +1,29 @@
+/* src/components/AddOns/AddOns.module.css */
+.addOns {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  background-color: rgba(50, 50, 50, 0.6);
+  border-radius: 12px;
+  margin-top: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.addOn {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 8px;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.addOn:hover {
+  transform: scale(1.05);
+}
+
+.addOn img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
