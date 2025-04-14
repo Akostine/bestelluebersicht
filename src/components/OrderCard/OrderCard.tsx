@@ -20,89 +20,58 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
     completedStages 
   } = order;
 
-  // Состояния для отслеживания загрузки изображения
+  // States для отслеживания загрузки изображения
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
 
   const deadlineSoon = isDeadlineSoon(deadline);
   const isCompleted = status === 'Abholbereit';
   
-  // Производственные этапы
+  // Define production stages
   const productionStages = ['CNC', 'LED', 'Silikon', 'UV Print', 'Lack', 'Verpackung'];
 
-  // Проверяем, является ли URL изображения защищенным от Monday.com
-  const isMondayProtectedUrl = mockupUrl && (
-    mockupUrl.includes('/protected_static/') || 
-    mockupUrl.includes('monday.com') ||
-    mockupUrl.includes('files.monday.com')
-  );
+  // Check if mockupUrl is from Monday.com's protected storage
+  const isMondayProtectedUrl = mockupUrl && mockupUrl.includes('/protected_static/');
   
-  // Извлекаем ID ресурса из URL Monday для лучшей обработки ошибок
+  // Extracting asset ID from Monday URL for better error reporting
   let assetId = '';
-  if (isMondayProtectedUrl) {
-    if (mockupUrl.includes('/resources/')) {
-      const match = mockupUrl.match(/\/resources\/(\d+)\//);
-      if (match && match[1]) {
-        assetId = match[1];
-      }
-    } else if (mockupUrl.includes('/file/d/')) {
-      const match = mockupUrl.match(/\/file\/d\/(\d+)\//);
-      if (match && match[1]) {
-        assetId = match[1];
-      }
-    } else if (mockupUrl.includes('/files/')) {
-      const match = mockupUrl.match(/\/files\/(\d+)\//);
-      if (match && match[1]) {
-        assetId = match[1];
-      }
+  if (isMondayProtectedUrl && mockupUrl.includes('/resources/')) {
+    const match = mockupUrl.match(/\/resources\/(\d+)\//);
+    if (match && match[1]) {
+      assetId = match[1];
     }
   }
   
-  // Формируем правильный URL для изображения
+  // Get the correct image URL - either direct or through our proxy
   const imageDisplayUrl = isMondayProtectedUrl 
-    ? `/api/monday-image?url=${encodeURIComponent(mockupUrl)}&id=${assetId}&t=${Date.now()}` 
+    ? `/api/monday-image?url=${encodeURIComponent(mockupUrl)}&id=${assetId}` 
     : mockupUrl;
 
-  // Обработка ошибки загрузки изображения
+  // Handle image loading error
   const handleImageError = () => {
-    console.log(`Ошибка загрузки изображения для заказа ${order.id}: ${imageDisplayUrl}`);
+    console.log(`Error loading image for order ${order.id}: ${imageDisplayUrl}`);
     setImageError(true);
     setImageLoading(false);
   };
 
-  // Обработка успешной загрузки изображения
+  // Handle image loading complete
   const handleImageLoad = () => {
-    console.log(`Успешно загружено изображение для заказа ${order.id}`);
+    console.log(`Successfully loaded image for order ${order.id}`);
     setImageLoading(false);
-  };
-
-  // Функция для повторной попытки загрузки изображения
-  const retryImageLoad = () => {
-    setImageError(false);
-    setImageLoading(true);
-    // Принудительное обновление URL с новым временным штампом
-    const timestamp = Date.now();
-    const newUrl = `/api/monday-image?url=${encodeURIComponent(mockupUrl)}&id=${assetId}&t=${timestamp}`;
-    
-    // Напрямую обновить src изображения, если возможно
-    const imgElement = document.querySelector(`[alt="${name || 'Neon sign'}"]`) as HTMLImageElement;
-    if (imgElement) {
-      imgElement.src = newUrl;
-    }
   };
 
   return (
     <div className={styles.card}>
-      {/* Изображение макета */}
+      {/* Mockup Image */}
       <div className={styles.mockupContainer}>
         {mockupUrl ? (
           <>
-            {imageLoading && !imageError && (
+            {/* {imageLoading && !imageError && (
               <div className={styles.imageLoading}>
                 <div className={styles.spinner}></div>
                 <div>Lade Bild...</div>
               </div>
-            )}
+            )} */}
             
             <Image 
               src={imageDisplayUrl} 
@@ -110,7 +79,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
               width={300} 
               height={200} 
               className={`${styles.mockup} ${imageLoading || imageError ? styles.hiddenImage : ''}`}
-              unoptimized={true}
+              unoptimized 
               onError={handleImageError}
               onLoad={handleImageLoad}
               style={{ opacity: imageLoading || imageError ? 0 : 1 }}
@@ -122,7 +91,16 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
                 <div>{name || 'Bild nicht verfügbar'}</div>
                 <button 
                   className={styles.retryButton}
-                  onClick={retryImageLoad}
+                  onClick={() => {
+                    setImageError(false);
+                    setImageLoading(true);
+                    // Force reload by adding timestamp
+                    const imgElement = document.querySelector(`[alt="${name || 'Neon sign'}"]`) as HTMLImageElement;
+                    if (imgElement) {
+                      const newUrl = `${imageDisplayUrl}${imageDisplayUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+                      imgElement.src = newUrl;
+                    }
+                  }}
                 >
                   Erneut versuchen
                 </button>
@@ -130,18 +108,16 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
             )}
           </>
         ) : (
-          <div className={styles.noMockup}>
-            <div>{name || 'Kein Bild verfügbar'}</div>
-          </div>
+          <div className={styles.noMockup}>Kein Bild verfügbar</div>
         )}
       </div>
 
-      {/* Правая секция с информацией о заказе */}
+      {/* Right section with order info */}
       <div className={styles.infoContainer}>
-        {/* Название заказа */}
+        {/* Item name */}
         <div className={styles.orderName}>{name}</div>
 
-        {/* Срок выполнения */}
+        {/* Deadline section */}
         <div className={`${styles.deadline} ${deadlineSoon ? styles.deadlineSoon : ''}`}>
           {formatDate(deadline)}
           {deadlineSoon && (
@@ -156,7 +132,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
           )}
         </div>
 
-        {/* Этапы производства */}
+        {/* Production stages */}
         <div className={styles.productionStages}>
           {productionStages.map((stage) => (
             <ProductionStage 
@@ -167,37 +143,31 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
           ))}
         </div>
 
-        {/* Текущий статус */}
-        <div className={styles.status}>
-          <div className={styles.statusLabel}>Status:</div>
-          <div className={styles.statusValue}>{status || 'Nicht begonnen'}</div>
-        </div>
-
-        {/* Нижняя секция */}
+        {/* Bottom section */}
         <div className={styles.bottomSection}>
-          {/* Дополнения (Левая часть) */}
+          {/* Add-ons (Left) */}
           <div className={styles.bottomLeft}>
             <AddOns 
               wasserdicht={wasserdicht}
-              fernbedienung={true} // Всегда true согласно требованиям
+              fernbedienung={true} // Always true as per requirements
               versandart={versandart}
             />
           </div>
 
-          {/* Расчет мощности (Правая часть) */}
+          {/* Power calculation (Right) */}
           <div className={styles.bottomRight}>
             <PowerCalculation ledLength={ledLength} />
           </div>
         </div>
 
-        {/* Галочка завершения */}
+        {/* Completion checkmark */}
         {isCompleted && (
           <div className={styles.completionCheckmark}>
             <Image 
               src="/icons/prufen.png" 
               alt="Abholbereit" 
-              width={64} 
-              height={64}
+              width={48} 
+              height={48}
             />
           </div>
         )}

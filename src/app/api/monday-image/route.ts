@@ -3,15 +3,15 @@ import { NextRequest } from 'next/server';
 
 export const runtime = 'edge';
 
-// Cache to reduce API requests
+// Кэш для уменьшения запросов к API
 const imageCache = new Map<string, { data: ArrayBuffer, contentType: string, timestamp: number }>();
-const CACHE_TIMEOUT = 900000; // 15 minutes
+const CACHE_TIMEOUT = 900000; // 15 минут
 
 function logInfo(message: string, data?: any) {
   console.log(`[MONDAY-PROXY] ${message}`, data ? JSON.stringify(data) : '');
 }
 
-// Function to get public asset URL through GraphQL API
+// Функция для получения публичного URL файла через GraphQL API
 async function getPublicAssetUrl(assetId: string, token: string): Promise<string | null> {
   try {
     const graphqlQuery = {
@@ -26,7 +26,7 @@ async function getPublicAssetUrl(assetId: string, token: string): Promise<string
       `
     };
 
-    logInfo(`Executing GraphQL query for asset URL: ${assetId}`);
+    logInfo(`Выполняем GraphQL запрос для получения URL ресурса: ${assetId}`);
 
     const response = await fetch('https://api.monday.com/v2', {
       method: 'POST',
@@ -38,29 +38,29 @@ async function getPublicAssetUrl(assetId: string, token: string): Promise<string
     });
 
     if (!response.ok) {
-      logInfo(`GraphQL API error: ${response.status}`);
+      logInfo(`GraphQL API ответил с ошибкой: ${response.status}`);
       return null;
     }
 
     const data = await response.json();
     
     if (data.errors) {
-      logInfo('GraphQL returned errors:', data.errors);
+      logInfo('GraphQL вернул ошибки:', data.errors);
       return null;
     }
     
     if (data.data?.assets?.length > 0) {
       const asset = data.data.assets[0];
-      logInfo('Asset data retrieved:', asset);
+      logInfo('Получены данные о ресурсе:', asset);
       
-      // Try public_url first, then url
+      // Сначала пробуем получить public_url, затем обычный url
       return asset.public_url || asset.url || null;
     } else {
-      logInfo('Asset not found in API response');
+      logInfo('Ресурс не найден в ответе API');
       return null;
     }
   } catch (error:any) {
-    logInfo(`Error getting public URL: ${error.message}`);
+    logInfo(`Ошибка при получении публичного URL: ${error.message}`);
     return null;
   }
 }
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   const skipCache = searchParams.get('t') !== null;
   const token = process.env.MONDAY_TOKEN;
 
-  logInfo(`Request received for: ${imageUrl?.substring(0, 100)}...`);
+  logInfo(`Получен запрос для: ${imageUrl?.substring(0, 100)}...`);
 
   if (!imageUrl) {
     return new Response('Missing image URL', { status: 400 });
@@ -82,17 +82,17 @@ export async function GET(request: NextRequest): Promise<Response> {
     return new Response('Missing API token', { status: 500 });
   }
 
-  // Create cache key
+  // Создаем ключ для кэша
   const cacheKey = imageUrl;
 
-  // Check cache unless skip requested
+  // Проверяем кэш, если не запрошено пропустить кэш
   if (!skipCache && imageCache.has(cacheKey)) {
     const cachedData = imageCache.get(cacheKey)!;
     const now = Date.now();
     
-    // Use cached data if not expired
+    // Используем кэшированные данные, если они не устарели
     if (now - cachedData.timestamp < CACHE_TIMEOUT) {
-      logInfo(`Using cached version for: ${imageUrl?.substring(0, 50)}...`);
+      logInfo(`Используем кэшированную версию для: ${imageUrl?.substring(0, 50)}...`);
       
       return new Response(cachedData.data, {
         headers: {
@@ -103,32 +103,32 @@ export async function GET(request: NextRequest): Promise<Response> {
         }
       });
     } else {
-      // Remove expired data
+      // Удаляем устаревшие данные
       imageCache.delete(cacheKey);
     }
   }
 
   try {
-    // Extract resource ID from URL if not provided
+    // Извлекаем ID ресурса из URL, если он не был передан как параметр
     let resourceId = assetId;
     if (!resourceId && imageUrl.includes('/resources/')) {
       const match = imageUrl.match(/\/resources\/(\d+)\//);
       if (match && match[1]) {
         resourceId = match[1];
-        logInfo(`Extracted resource ID from URL: ${resourceId}`);
+        logInfo(`Извлечен ID ресурса из URL: ${resourceId}`);
       }
     }
 
     if (!resourceId) {
-      logInfo('Could not extract asset ID');
+      logInfo('Не удалось извлечь ID ресурса');
       return new Response('Could not extract asset ID', { status: 400 });
     }
 
-    // Get public URL through GraphQL API
+    // НОВЫЙ КОД: Получаем публичный URL через GraphQL API
     const publicApiUrl = await getPublicAssetUrl(resourceId, token);
     
     if (publicApiUrl) {
-      logInfo(`Public URL obtained via API: ${publicApiUrl}`);
+      logInfo(`Получен публичный URL через API: ${publicApiUrl}`);
       
       try {
         const imageResponse = await fetch(publicApiUrl, { cache: 'no-store' });
@@ -137,14 +137,14 @@ export async function GET(request: NextRequest): Promise<Response> {
           const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
           const imageData = await imageResponse.arrayBuffer();
           
-          // Save to cache
+          // Сохраняем в кэш
           imageCache.set(cacheKey, {
             data: imageData,
             contentType,
             timestamp: Date.now()
           });
           
-          logInfo(`Successfully loaded image via official API URL: ${imageData.byteLength} bytes`);
+          logInfo(`Успешно загружено изображение через официальный API URL: ${imageData.byteLength} байт`);
           
           return new Response(imageData, {
             headers: {
@@ -155,16 +155,16 @@ export async function GET(request: NextRequest): Promise<Response> {
             }
           });
         } else {
-          logInfo(`Error loading from public API URL: ${imageResponse.status}`);
+          logInfo(`Ошибка при загрузке через публичный API URL: ${imageResponse.status}`);
         }
       } catch (e:any) {
-        logInfo(`Error loading from public API URL: ${e.message}`);
+        logInfo(`Ошибка при загрузке через публичный API URL: ${e.message}`);
       }
     }
 
-    // If API method failed, try file download API
+    // Если API метод не сработал, пробуем файловый API
     const fileDownloadUrl = `https://files.monday.com/file/download/${resourceId}`;
-    logInfo(`Trying download URL: ${fileDownloadUrl}`);
+    logInfo(`Пробуем download URL: ${fileDownloadUrl}`);
 
     const fileResponse = await fetch(fileDownloadUrl, {
       headers: {
@@ -178,14 +178,14 @@ export async function GET(request: NextRequest): Promise<Response> {
       const contentType = fileResponse.headers.get('content-type') || 'image/jpeg';
       const imageData = await fileResponse.arrayBuffer();
       
-      // Save to cache
+      // Сохраняем в кэш
       imageCache.set(cacheKey, {
         data: imageData,
         contentType,
         timestamp: Date.now()
       });
       
-      logInfo(`Successfully retrieved file via download URL: ${imageData.byteLength} bytes`);
+      logInfo(`Успешно получен файл через download URL: ${imageData.byteLength} байт`);
       
       return new Response(imageData, {
         headers: {
@@ -197,8 +197,8 @@ export async function GET(request: NextRequest): Promise<Response> {
       });
     }
 
-    // Try direct request as last resort
-    logInfo(`Direct request to URL: ${imageUrl}`);
+    // Пробуем прямой запрос в последнюю очередь
+    logInfo(`Прямой запрос к URL: ${imageUrl}`);
     
     const directResponse = await fetch(imageUrl, {
       headers: {
@@ -211,7 +211,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     });
     
     if (!directResponse.ok) {
-      logInfo(`Error with direct request: ${directResponse.status}`);
+      logInfo(`Ошибка при прямом запросе: ${directResponse.status}`);
       return new Response(`Failed to fetch image: ${directResponse.status}`, { 
         status: directResponse.status 
       });
@@ -220,14 +220,14 @@ export async function GET(request: NextRequest): Promise<Response> {
     const contentType = directResponse.headers.get('content-type') || 'image/jpeg';
     const imageData = await directResponse.arrayBuffer();
     
-    // Save to cache
+    // Сохраняем в кэш
     imageCache.set(cacheKey, {
       data: imageData,
       contentType,
       timestamp: Date.now()
     });
     
-    logInfo(`Successfully retrieved file via direct request: ${imageData.byteLength} bytes`);
+    logInfo(`Успешно получен файл через прямой запрос: ${imageData.byteLength} байт`);
     
     return new Response(imageData, {
       headers: {
@@ -238,7 +238,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       }
     });
   } catch (error: any) {
-    logInfo(`Error fetching image: ${error.message}`);
+    logInfo(`Ошибка при получении изображения: ${error.message}`);
     return new Response(`Error fetching image: ${error.message}`, { status: 500 });
   }
 }

@@ -15,7 +15,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // GraphQL query for fetching order data
+  // GraphQL запрос для получения данных о заказах
   const query = `
     query {
       boards(ids: [${boardId}]) {
@@ -42,10 +42,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   `;
 
   try {
-    // Execute the query
+    // Выполнение запроса
     const response = await executeServerQuery(token, query);
 
-    // Handle API errors
+    // Обработка ошибок API
     if (response.errors) {
       console.error('Monday.com API errors:', response.errors);
       return NextResponse.json(
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Check response structure
+    // Проверка структуры ответа
     if (!response.data?.boards || response.data.boards.length === 0) {
       console.log('API Response:', JSON.stringify(response, null, 2));
       return NextResponse.json(
@@ -67,15 +67,28 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Get board data and columns
+    // Получаем данные доски и колонок
     const board = response.data.boards[0];
     const columns = board.columns || [];
     
-    // Create column map for easy access
+    // Выводим все колонки для отладки
+            //@ts-ignore
+
+    console.log('All columns:', columns.map(col => ({ 
+      id: col.id, 
+      title: col.title, 
+      type: col.type 
+    })));
+
+    // Создаем карту колонок для быстрого доступа
+            //@ts-ignore
+
     const columnMap: Record<string, any> = {};
-    columns.forEach((col: any) => {
+            //@ts-ignore
+
+    columns.forEach(col => {
       if (col && col.title) {
-        // Normalize title (lowercase, replace spaces and special chars)
+        // Нормализация заголовка (в нижний регистр, замена пробелов и специальных символов)
         const normalizedTitle = col.title.toLowerCase().replace(/[^a-z0-9]/g, '_');
         columnMap[normalizedTitle] = {
           id: col.id,
@@ -90,28 +103,43 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     });
 
-    // Get items (orders) from the board
+    console.log('Column mapping:', columnMap);
+
+    // Получаем элементы (заказы) из доски
     const items = board.items_page?.items || [];
     
     if (items.length === 0) {
       return NextResponse.json({ orders: [] });
     }
 
-    const orders = items.map((item: any) => {
-      // Helper function to get column value by ID or title
+           //@ts-ignore
+
+    const orders = items.map(item => {
+      // Выводим ID всех колонок и их значения для отладки
+      console.log(`All column IDs for item ${item.id} :`, 
+                //@ts-ignore
+
+        item.column_values.map(c => `${c.id} (${c.text})`).join(', ')
+      );
+
+      // Функция для получения значения колонки по ID или заголовку
       const getColumnValue = (idOrTitle: string): string => {
         if (!idOrTitle) return '';
         
-        // Direct search by column ID
-        const col = item.column_values.find((c: any) => c.id === idOrTitle);
+        // Прямой поиск по ID колонки
+                //@ts-ignore
+
+        const col = item.column_values.find(c => c.id === idOrTitle);
         if (col) return col.text || '';
         
-        // Search by normalized title
+        // Поиск через нормализованный заголовок
         try {
           const normalizedSearch = idOrTitle.toLowerCase().replace(/[^a-z0-9]/g, '_');
           const mappedCol = columnMap[normalizedSearch];
           if (mappedCol) {
-            const found = item.column_values.find((c: any) => c.id === mappedCol.id);
+                    //@ts-ignore
+
+            const found = item.column_values.find(c => c.id === mappedCol.id);
             return found ? found.text || '' : '';
           }
         } catch (e) {
@@ -121,12 +149,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         return '';
       };
 
-      // Helper function to get JSON value
+      // Функция для получения JSON-значения колонки
       const getJsonValue = (idOrTitle: string): any => {
         if (!idOrTitle) return null;
         
-        // Direct search by column ID
-        const col = item.column_values.find((c: any) => c.id === idOrTitle);
+        // Прямой поиск по ID колонки
+        //@ts-ignore
+        const col = item.column_values.find(c => c.id === idOrTitle);
         if (col && col.value) {
           try {
             return JSON.parse(col.value);
@@ -136,12 +165,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           }
         }
         
-        // Search by normalized title
+        // Поиск через нормализованный заголовок
         try {
           const normalizedSearch = idOrTitle.toLowerCase().replace(/[^a-z0-9]/g, '_');
           const mappedCol = columnMap[normalizedSearch];
           if (mappedCol) {
-            const found = item.column_values.find((c: any) => c.id === mappedCol.id);
+                    //@ts-ignore
+
+            const found = item.column_values.find(c => c.id === mappedCol.id);
             if (found && found.value) {
               try {
                 return JSON.parse(found.value);
@@ -158,11 +189,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         return null;
       };
 
-      // Get status and determine completed stages
+      // Получение статуса и определение завершенных этапов
       const status = getColumnValue('status') || '';
       const stages = ['CNC', 'LED', 'SILIKON', 'UV Print', 'Lack', 'Verpackung'];
       
-      // For completed stages, find current stage and include all previous
+      // Для завершенных этапов находим текущий этап и включаем все предыдущие
       let completedStages: string[] = [];
       const currentStageIndex = stages.findIndex(stage => 
         stage.toLowerCase() === status.toLowerCase()
@@ -171,46 +202,51 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       if (currentStageIndex >= 0) {
         completedStages = stages.slice(0, currentStageIndex + 1);
       } else if (status.toLowerCase() === 'abholbereit') {
-        // If status is "Abholbereit", all stages are complete
+        // Если статус "Abholbereit", все этапы завершены
         completedStages = [...stages];
       }
 
-      // Get mockup URL
+      // Получение URL изображения Mock-Up
       let mockupUrl = '';
       
-      // Find file column for mockup
-      const mockupColumnId = columnMap.mock_up?.id || 'file';
+      // Ищем колонку файла Mock-Up (на основе маппинга колонок)
+      const mockupColumnId = columnMap.mock_up?.id || 'file_mkpxcy3z';
       
-      // Get column value
-      const mockupColumn = item.column_values.find((c: any) => c.id === mockupColumnId);
+      // Получаем значение колонки
+              //@ts-ignore
+
+      const mockupColumn = item.column_values.find(c => c.id === mockupColumnId);
       
-      // If found column with image and it has a value
+      // Если нашли колонку с изображением и у нее есть значение
       if (mockupColumn && mockupColumn.value) {
         try {
           const mockupJson = JSON.parse(mockupColumn.value);
           
-          // Extract URL from JSON structure
+          // Извлекаем URL из структуры JSON
           if (mockupJson.files && mockupJson.files.length > 0) {
             mockupUrl = mockupJson.files[0].url || '';
+            console.log(`Found mockup URL in column ${mockupColumnId}`);
           }
         } catch (e) {
           console.warn(`Failed to parse mock-up JSON:`, e);
         }
       }
       
-      // If URL not found in main column, use text value
+      // Если URL из основной колонки не найден, используем текстовое значение
       if (!mockupUrl && mockupColumn && mockupColumn.text) {
         mockupUrl = mockupColumn.text;
       }
 
-      // Get LED length
+      // Получение длины LED-ленты
       let ledLength = 0;
       try {
-        // Find column for LED length
-        const ledColumnId = columnMap.led_l_nge?.id || 'led_länge' || 'numeric';
-        const ledColumn = item.column_values.find((c: any) => c.id === ledColumnId || c.title?.toLowerCase().includes('led'));
+        // Ищем колонку с длиной LED на основе маппинга
+        const ledColumnId = columnMap.led_l_nge?.id || 'numeric_mkpxsm0s';
+                //@ts-ignore
+
+        const ledColumn = item.column_values.find(c => c.id === ledColumnId);
         
-        // Parse value, handle comma as decimal separator
+        // Парсим значение, учитывая запятую как разделитель десятичных чисел
         if (ledColumn && ledColumn.text) {
           ledLength = parseFloat(ledColumn.text.replace(',', '.')) || 0;
         }
@@ -218,33 +254,31 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         console.warn(`Error parsing LED length:`, e);
       }
 
-      // Determine if wasserdicht
+      // Определяем, является ли знак водонепроницаемым
       let isWasserdicht = false;
       try {
-        const wasserdichtColumnId = columnMap.wasserdicht?.id || 'wasserdicht';
-        const wasserdichtColumn = item.column_values.find((c: any) => 
-          c.id === wasserdichtColumnId || 
-          c.title?.toLowerCase().includes('wasserdicht')
-        );
+        const wasserdichtColumnId = columnMap.wasserdicht__?.id || 'color_mkpx96t2';
+                //@ts-ignore
+
+        const wasserdichtColumn = item.column_values.find(c => c.id === wasserdichtColumnId);
         
         if (wasserdichtColumn) {
           const wasserdichtText = wasserdichtColumn.text || '';
           isWasserdicht = wasserdichtText.toLowerCase() === 'ja' || 
-                        wasserdichtText.toLowerCase() === 'yes' ||
-                        wasserdichtText.toLowerCase() === 'true';
+                          wasserdichtText.toLowerCase() === 'yes' ||
+                          wasserdichtText.toLowerCase() === 'true';
         }
       } catch (e) {
         console.warn(`Error determining wasserdicht status:`, e);
       }
 
-      // Get versandart
+      // Получаем значение Versandart
       let versandart = '';
       try {
-        const versandartColumnId = columnMap.versandart?.id || 'versandart';
-        const versandartColumn = item.column_values.find((c: any) => 
-          c.id === versandartColumnId || 
-          c.title?.toLowerCase().includes('versand')
-        );
+        const versandartColumnId = columnMap.versandart?.id || 'color_mkpxdbea';
+                //@ts-ignore
+
+        const versandartColumn = item.column_values.find(c => c.id === versandartColumnId);
         
         if (versandartColumn) {
           versandart = versandartColumn.text || '';
@@ -253,7 +287,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         console.warn(`Error getting versandart:`, e);
       }
 
-      // Create order object
+      // Создаем объект заказа
       return {
         id: item.id,
         name: item.name,
@@ -267,16 +301,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       };
     });
 
-    // Sort orders by deadline (closest first)
-    const sortedOrders = orders.sort((a: any, b: any) => {
+    // Сортируем заказы по дедлайну (ближайшие сначала)
+            //@ts-ignore
+
+    const sortedOrders = orders.sort((a, b) => {
       if (!a.deadline) return 1;
       if (!b.deadline) return -1;
       return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
     });
 
-    // Filter orders with status "Abholbereit" and move them to end
-    const pendingOrders = sortedOrders.filter((order: any) => order.status !== 'Abholbereit');
-    const completedOrders = sortedOrders.filter((order: any) => order.status === 'Abholbereit');
+    // Отфильтровываем заказы со статусом "Abholbereit" и перемещаем их в конец
+            //@ts-ignore
+
+    const pendingOrders = sortedOrders.filter(order => order.status !== 'Abholbereit');
+            //@ts-ignore
+
+    const completedOrders = sortedOrders.filter(order => order.status === 'Abholbereit');
     
     const finalOrders = [...pendingOrders, ...completedOrders];
 
