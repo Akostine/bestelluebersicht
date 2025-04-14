@@ -57,7 +57,7 @@ export default function Home() {
     // Set up auto-refresh every 60 seconds
     const intervalId = setInterval(() => {
       loadOrders();
-    }, 60000);
+    }, 900000);
     
     // Clean up interval on component unmount
     return () => clearInterval(intervalId);
