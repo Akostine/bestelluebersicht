@@ -1,5 +1,5 @@
 // src/components/OrderCard/OrderCard.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { OrderCardProps } from '@/lib/types';
 import ProductionStage from '../ProductionStage/ProductionStage';
@@ -29,6 +29,12 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
   
   // Define production stages
   const productionStages = ['CNC', 'LED', 'Silikon', 'UV Print', 'Lack', 'Verpackung'];
+
+  // Debug logging
+  useEffect(() => {
+    console.log(`OrderCard ${order.id} rendered with status: ${status}`);
+    console.log(`Completed stages for order ${order.id}:`, completedStages);
+  }, [order.id, status, completedStages]);
 
   // Check if mockupUrl is from Monday.com's protected storage
   const isMondayProtectedUrl = mockupUrl && mockupUrl.includes('/protected_static/');
@@ -66,19 +72,12 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
       <div className={styles.mockupContainer}>
         {mockupUrl ? (
           <>
-            {/* {imageLoading && !imageError && (
-              <div className={styles.imageLoading}>
-                <div className={styles.spinner}></div>
-                <div>Lade Bild...</div>
-              </div>
-            )} */}
-            
             <Image 
               src={imageDisplayUrl} 
               alt={name || 'Neon sign'} 
               width={300} 
               height={200} 
-              className={`${styles.mockup} ${imageLoading || imageError ? styles.hiddenImage : ''}`}
+              className={styles.mockup}
               unoptimized 
               onError={handleImageError}
               onLoad={handleImageLoad}
@@ -134,13 +133,19 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
 
         {/* Production stages */}
         <div className={styles.productionStages}>
-          {productionStages.map((stage) => (
-            <ProductionStage 
-              key={stage} 
-              stage={stage as any}
-              isCompleted={completedStages.includes(stage)}
-            />
-          ))}
+          {productionStages.map((stage) => {
+            // Debug check to verify if this stage should be marked as completed
+            const stageComplete = completedStages.includes(stage);
+            console.log(`Stage ${stage} complete? ${stageComplete}`);
+            
+            return (
+              <ProductionStage 
+                key={stage} 
+                stage={stage as any}
+                isCompleted={stageComplete}
+              />
+            );
+          })}
         </div>
 
         {/* Bottom section */}
