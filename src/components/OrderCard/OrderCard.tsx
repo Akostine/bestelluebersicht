@@ -25,15 +25,15 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
   const [imageLoading, setImageLoading] = useState(true);
 
   const deadlineSoon = isDeadlineSoon(deadline);
-  const isCompleted = status === 'Abholbereit';
+  const isCompleted = status?.toLowerCase() === 'abholbereit';
   
-  // Define production stages
+  // Define production stages - match exactly what's used in the API
   const productionStages = ['CNC', 'LED', 'Silikon', 'UV Print', 'Lack', 'Verpackung'];
 
-  // Debug logging
+  // Debug: Log completed stages when component updates
   useEffect(() => {
-    console.log(`OrderCard ${order.id} rendered with status: ${status}`);
-    console.log(`Completed stages for order ${order.id}:`, completedStages);
+    console.log(`OrderCard ${order.id} status: "${status}"`);
+    console.log(`OrderCard ${order.id} completedStages:`, completedStages);
   }, [order.id, status, completedStages]);
 
   // Check if mockupUrl is from Monday.com's protected storage
@@ -134,15 +134,13 @@ const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
         {/* Production stages */}
         <div className={styles.productionStages}>
           {productionStages.map((stage) => {
-            // Debug check to verify if this stage should be marked as completed
-            const stageComplete = completedStages.includes(stage);
-            console.log(`Stage ${stage} complete? ${stageComplete}`);
-            
+            // Check if this stage is completed
+            const isStageCompleted = completedStages.includes(stage);
             return (
               <ProductionStage 
                 key={stage} 
                 stage={stage as any}
-                isCompleted={stageComplete}
+                isCompleted={isStageCompleted}
               />
             );
           })}

@@ -4,6 +4,57 @@ import { executeServerQuery } from '@/lib/monday-api';
 
 export const runtime = 'edge';
 
+interface Column {
+  id: string;
+  title: string;
+  type: string;
+}
+
+interface ColumnValue {
+  id: string;
+  text: string;
+  value: string;
+  type: string;
+}
+
+interface Item {
+  id: string;
+  name: string;
+  column_values: ColumnValue[];
+}
+
+interface Board {
+  name: string;
+  columns: Column[];
+  items_page: {
+    items: Item[];
+  };
+}
+
+interface ApiResponse {
+  data?: {
+    boards?: Board[];
+  };
+  errors?: Array<{ message: string }>;
+}
+
+interface StageDefinition {
+  stage: string;
+  matches: string[];
+}
+
+interface Order {
+  id: string;
+  name: string;
+  mockupUrl: string;
+  deadline: string | null;
+  status: string;
+  ledLength: number;
+  wasserdicht: boolean;
+  versandart: string;
+  completedStages: string[];
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const token = process.env.MONDAY_TOKEN;
   const boardId = process.env.MONDAY_BOARD_ID;
@@ -43,7 +94,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     // Выполнение запроса
-    const response = await executeServerQuery(token, query);
+    const response: ApiResponse = await executeServerQuery(token, query);
 
     // Обработка ошибок API
     if (response.errors) {
@@ -72,8 +123,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const columns = board.columns || [];
     
     // Выводим все колонки для отладки
-            //@ts-ignore
-
     console.log('All columns:', columns.map(col => ({ 
       id: col.id, 
       title: col.title, 
@@ -81,11 +130,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     })));
 
     // Создаем карту колонок для быстрого доступа
-            //@ts-ignore
-
-    const columnMap: Record<string, any> = {};
-            //@ts-ignore
-
+    const columnMap: Record<string, { id: string; type: string; title: string }> = {};
     columns.forEach(col => {
       if (col && col.title) {
         // Нормализация заголовка (в нижний регистр, замена пробелов и специальных символов)
@@ -112,13 +157,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ orders: [] });
     }
 
-           //@ts-ignore
+    // Define the production stages with all possible variations
+    // This helps with case insensitive matching
+    const stageSequence: StageDefinition[] = [
+      { stage: 'CNC', matches: ['cnc', 'фрезеровка'] },
+      { stage: 'LED', matches: ['led', 'лед'] },
+      { stage: 'Silikon', matches: ['silikon', 'silicon', 'силикон'] },
+      { stage: 'UV Print', matches: ['uv print', 'uv', 'печать', 'увпечать'] },
+      { stage: 'Lack', matches: ['lack', 'лак'] },
+      { stage: 'Verpackung', matches: ['verpackung', 'verpacken', 'упаковка'] },
+    ];
 
-    const orders = items.map(item => {
+    const orders: Order[] = items.map(item => {
       // Выводим ID всех колонок и их значения для отладки
       console.log(`All column IDs for item ${item.id} :`, 
-                //@ts-ignore
-
         item.column_values.map(c => `${c.id} (${c.text})`).join(', ')
       );
 
@@ -127,8 +179,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         if (!idOrTitle) return '';
         
         // Прямой поиск по ID колонки
-                //@ts-ignore
-
         const col = item.column_values.find(c => c.id === idOrTitle);
         if (col) return col.text || '';
         
@@ -137,8 +187,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           const normalizedSearch = idOrTitle.toLowerCase().replace(/[^a-z0-9]/g, '_');
           const mappedCol = columnMap[normalizedSearch];
           if (mappedCol) {
-                    //@ts-ignore
-
             const found = item.column_values.find(c => c.id === mappedCol.id);
             return found ? found.text || '' : '';
           }
@@ -154,7 +202,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         if (!idOrTitle) return null;
         
         // Прямой поиск по ID колонки
-        //@ts-ignore
         const col = item.column_values.find(c => c.id === idOrTitle);
         if (col && col.value) {
           try {
@@ -170,8 +217,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           const normalizedSearch = idOrTitle.toLowerCase().replace(/[^a-z0-9]/g, '_');
           const mappedCol = columnMap[normalizedSearch];
           if (mappedCol) {
-                    //@ts-ignore
-
             const found = item.column_values.find(c => c.id === mappedCol.id);
             if (found && found.value) {
               try {
@@ -191,27 +236,36 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
       // Получение статуса и определение завершенных этапов
       const status = getColumnValue('status') || '';
+      const statusLower = status.toLowerCase().trim();
       
-      // Определяем стандартные этапы производства (в том формате, как они используются в компоненте)
-      const stages = ['CNC', 'LED', 'Silikon', 'UV Print', 'Lack', 'Verpackung'];
+      // Определяем индекс текущего этапа в последовательности
+      let currentStageIndex = -1;
       
-      // Для завершенных этапов находим текущий этап и включаем все предыдущие, но НЕ текущий
-      let completedStages: string[] = [];
-      const currentStageIndex = stages.findIndex(stage => 
-        stage.toLowerCase() === status.toLowerCase()
-      );
-      
-      // ИСПРАВЛЕНО: берем только предыдущие этапы, не включая текущий
-      if (currentStageIndex >= 0) {
-        // slice(0, currentStageIndex + 1) даст нам все этапы до текущего включительно
-        completedStages = stages.slice(0, currentStageIndex + 1);
-      } else if (status.toLowerCase() === 'abholbereit') {
-        // Если статус "Abholbereit", все этапы завершены
-        completedStages = [...stages];
+      // Ищем индекс текущего этапа с учетом всех возможных вариантов написания
+      for (let i = 0; i < stageSequence.length; i++) {
+        if (stageSequence[i].matches.some(match => statusLower.includes(match))) {
+          currentStageIndex = i;
+          break;
+        }
       }
-
-      // Для отладки выводим статус и какие этапы считаются завершенными
-      console.log(`Order ${item.id} status: ${status}, current stage index: ${currentStageIndex}, completed stages:`, completedStages);
+      
+      console.log(`Order ${item.id} status: "${status}" matched to stage index: ${currentStageIndex}`);
+      
+      // Определение завершенных этапов
+      let completedStages: string[] = [];
+      
+      if (currentStageIndex > 0) {
+        // Если текущая стадия не первая, то все предыдущие стадии уже завершены
+        completedStages = stageSequence.slice(0, currentStageIndex).map(s => s.stage);
+      }
+      
+      // Если статус "Abholbereit" или "Fertig", все этапы завершены
+      if (statusLower.includes('abholbereit') || statusLower.includes('fertig') || 
+          statusLower.includes('готов') || statusLower.includes('выполнен')) {
+        completedStages = stageSequence.map(s => s.stage);
+      }
+      
+      console.log(`Order ${item.id} completed stages:`, completedStages);
 
       // Получение URL изображения Mock-Up
       let mockupUrl = '';
@@ -220,8 +274,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       const mockupColumnId = columnMap.mock_up?.id || 'file_mkpxcy3z';
       
       // Получаем значение колонки
-              //@ts-ignore
-
       const mockupColumn = item.column_values.find(c => c.id === mockupColumnId);
       
       // Если нашли колонку с изображением и у нее есть значение
@@ -249,8 +301,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       try {
         // Ищем колонку с длиной LED на основе маппинга
         const ledColumnId = columnMap.led_l_nge?.id || 'numeric_mkpxsm0s';
-                //@ts-ignore
-
         const ledColumn = item.column_values.find(c => c.id === ledColumnId);
         
         // Парсим значение, учитывая запятую как разделитель десятичных чисел
@@ -265,8 +315,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       let isWasserdicht = false;
       try {
         const wasserdichtColumnId = columnMap.wasserdicht__?.id || 'color_mkpx96t2';
-                //@ts-ignore
-
         const wasserdichtColumn = item.column_values.find(c => c.id === wasserdichtColumnId);
         
         if (wasserdichtColumn) {
@@ -283,8 +331,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       let versandart = '';
       try {
         const versandartColumnId = columnMap.versandart?.id || 'color_mkpxdbea';
-                //@ts-ignore
-
         const versandartColumn = item.column_values.find(c => c.id === versandartColumnId);
         
         if (versandartColumn) {
@@ -308,8 +354,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       };
     });
 
-    // НОВЫЙ КОД: Фильтрация заказов - исключаем заказы со статусом "Abholbereit" или "Versendet"
-    //@ts-ignore
+    // Фильтрация заказов - исключаем заказы со статусом "Abholbereit" или "Versendet"
     const filteredOrders = orders.filter(order => {
       const orderStatus = order.status.toLowerCase();
       return orderStatus !== 'abholbereit' && orderStatus !== 'versendet';
@@ -318,7 +363,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     console.log(`Общее количество заказов: ${orders.length}, после фильтрации: ${filteredOrders.length}`);
 
     // Сортируем отфильтрованные заказы по дедлайну (ближайшие сначала)
-    //@ts-ignore
     const sortedOrders = filteredOrders.sort((a, b) => {
       if (!a.deadline) return 1;
       if (!b.deadline) return -1;
