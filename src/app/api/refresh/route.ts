@@ -202,8 +202,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
       
       // ИСПРАВЛЕНО: берем только предыдущие этапы, не включая текущий
-      if (currentStageIndex > 0) { // если это НЕ первый этап
-        completedStages = stages.slice(0, currentStageIndex); // берём все до текущего, но не включая текущий
+      if (currentStageIndex >= 0) {
+        // slice(0, currentStageIndex + 1) даст нам все этапы до текущего включительно
+        completedStages = stages.slice(0, currentStageIndex + 1);
       } else if (status.toLowerCase() === 'abholbereit') {
         // Если статус "Abholbereit", все этапы завершены
         completedStages = [...stages];
