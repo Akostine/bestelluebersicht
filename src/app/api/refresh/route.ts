@@ -191,20 +191,26 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
       // Получение статуса и определение завершенных этапов
       const status = getColumnValue('status') || '';
-      const stages = ['CNC', 'LED', 'SILIKON', 'UV Print', 'Lack', 'Verpackung'];
       
-      // Для завершенных этапов находим текущий этап и включаем все предыдущие
+      // Определяем стандартные этапы производства (в том формате, как они используются в компоненте)
+      const stages = ['CNC', 'LED', 'Silikon', 'UV Print', 'Lack', 'Verpackung'];
+      
+      // Для завершенных этапов находим текущий этап и включаем все предыдущие, но НЕ текущий
       let completedStages: string[] = [];
       const currentStageIndex = stages.findIndex(stage => 
         stage.toLowerCase() === status.toLowerCase()
       );
       
-      if (currentStageIndex >= 0) {
-        completedStages = stages.slice(0, currentStageIndex + 1);
+      // ИСПРАВЛЕНО: берем только предыдущие этапы, не включая текущий
+      if (currentStageIndex > 0) { // если это НЕ первый этап
+        completedStages = stages.slice(0, currentStageIndex); // берём все до текущего, но не включая текущий
       } else if (status.toLowerCase() === 'abholbereit') {
         // Если статус "Abholbereit", все этапы завершены
         completedStages = [...stages];
       }
+
+      // Для отладки выводим статус и какие этапы считаются завершенными
+      console.log(`Order ${item.id} status: ${status}, current stage index: ${currentStageIndex}, completed stages:`, completedStages);
 
       // Получение URL изображения Mock-Up
       let mockupUrl = '';
@@ -301,30 +307,29 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       };
     });
 
-    // Сортируем заказы по дедлайну (ближайшие сначала)
-            //@ts-ignore
+    // НОВЫЙ КОД: Фильтрация заказов - исключаем заказы со статусом "Abholbereit" или "Versendet"
+    //@ts-ignore
+    const filteredOrders = orders.filter(order => {
+      const orderStatus = order.status.toLowerCase();
+      return orderStatus !== 'abholbereit' && orderStatus !== 'versendet';
+    });
+    
+    console.log(`Общее количество заказов: ${orders.length}, после фильтрации: ${filteredOrders.length}`);
 
-    const sortedOrders = orders.sort((a, b) => {
+    // Сортируем отфильтрованные заказы по дедлайну (ближайшие сначала)
+    //@ts-ignore
+    const sortedOrders = filteredOrders.sort((a, b) => {
       if (!a.deadline) return 1;
       if (!b.deadline) return -1;
       return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
     });
 
-    // Отфильтровываем заказы со статусом "Abholbereit" и перемещаем их в конец
-            //@ts-ignore
-
-    const pendingOrders = sortedOrders.filter(order => order.status !== 'Abholbereit');
-            //@ts-ignore
-
-    const completedOrders = sortedOrders.filter(order => order.status === 'Abholbereit');
-    
-    const finalOrders = [...pendingOrders, ...completedOrders];
-
     return NextResponse.json({ 
-      orders: finalOrders,
+      orders: sortedOrders,
       _meta: {
         boardName: board.name,
         itemCount: items.length,
+        filteredCount: sortedOrders.length,
         timestamp: new Date().toISOString()
       }
     });

@@ -10,8 +10,8 @@ const versandartIcons: Record<string, string> = {
   'lieferung': '/icons/004-hands.png',
   'montage': '/icons/005-maintenance.png',
   'selbstabholer': '/icons/abholer.png',
-  'selbstabholung': '/icons/007-cash-on-delivery.png',
-  'abholer': '/icons/007-cash-on-delivery.png',
+  'selbstabholung': '/icons/006-delivery.png',
+  'abholer': '/icons/006-delivery.png',
   'versand': '/icons/008-delivery-1.png'
 };
 

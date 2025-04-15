@@ -14,12 +14,21 @@ const stageIcons: Record<string, string> = {
   'Verpackung': '/icons/verpackung.png',
 };
 
+// Отладочный вывод для проверки имен этапов
+console.log('Available stage keys in ProductionStage:', Object.keys(stageIcons));
+
 const ProductionStage: React.FC<ProductionStageProps> = ({ stage, isCompleted }) => {
+  // Отладочный вывод для проверки значений
+  console.log(`Rendering stage: ${stage}, isCompleted: ${isCompleted}`);
+  
+  // Убедимся, что у нас есть иконка для этапа
+  const iconSrc = stageIcons[stage] || '/icons/silikon.png';
+  
   return (
     <div className={`${styles.stage} ${isCompleted ? styles.completed : ''}`}>
       <div className={styles.iconContainer}>
         <Image 
-          src={stageIcons[stage]} 
+          src={iconSrc} 
           alt={stage} 
           width={64} 
           height={64} 
